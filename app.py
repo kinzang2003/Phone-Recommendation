@@ -18,7 +18,7 @@ knn_label_encoder_path = 'model/label_encoderforknn.pkl'
 knn_label_encoder = joblib.load(knn_label_encoder_path)
 
 # Load the Excel file and get unique brands
-file_path = 'c:/Users/kinza/Desktop/PHONE/output.xlsx'  # Update the file path
+file_path = 'output.xlsx'  # Update the file path
 data = pd.read_excel(file_path)
 unique_brands = data['Brand'].unique().tolist()
 
