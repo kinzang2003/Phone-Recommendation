@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Recommender</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+      <div id="section1" class="section section-start">
+       
+            <header style="color: white;">
+                Get The Phone Of Your Choice
+            </header>
+            
+            
+            
+
+        </div>
+    </div>
+  
+    <div class="container">
+        <h1>Phone Recommender</h1>
+        <a style="text-decoration: none; color: #000000; font-size: 20px; display: block; margin-left: 80%;" href="/othermodel">Try othermodel</a>
+        <form id="phoneForm">
+            <label for="Brand">Brand:(Type none if no preference)</label>
+            <input type="text" id="Brand" name="Brand" list="brands" required>
+            <datalist id="brands">
+                {% for brand in brands %}
+                    <option value="{{ brand }}">{{ brand }}</option>
+                {% endfor %}
+            </datalist>
+            <label for="Price">Price:</label>
+            <input type="number" id="Price" name="Price" required>
+            <label for="Internal storage (GB)">Internal Storage (GB):</label>
+            <input type="number" id="Internal storage (GB)" name="Internal storage (GB)" required max="512">
+            <label for="RAM (GB)">RAM (GB):</label>
+            <input type="number" id="RAM (GB)" name="RAM (GB)" required max="12">
+            <label for="Rear camera">Rear Camera (MP):</label>
+            <input type="number" id="Rear camera" name="Rear camera" required max="102">
+            <label for="Front camera">Front Camera (MP):</label>
+            <input type="number" id="Front camera" name="Front camera" required max="48">
+            <label for="Battery capacity (mAh)">Battery Capacity (mAh):</label>
+            <input type="number" id="Battery capacity (mAh)" name="Battery capacity (mAh)" required max="6000">
+            <button type="submit">Recommend</button>
+        </form>
+        <div id="loading" class="loading-spinner" style="display: none;"></div>
+        <div id="result"></div>
+        <div id="phoneDetails"></div>
+        <canvas id="comparisonRadarChart" style="display: none;"></canvas>
+        <canvas id="comparisonBarChart" style="display: none;"></canvas>
+        <canvas id="comparisonLineChart" style="display: none;"></canvas>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let radarChart;
+        let barChart;
+        let lineChart;
+
+        $(document).ready(function() {
+            $('#phoneForm').on('submit', function(e) {
+                e.preventDefault();
+                $('#loading').show();
+                $('#result').hide();
+                $('#phoneDetails').hide();
+                $('#comparisonRadarChart').hide();
+                $('#comparisonBarChart').hide();
+                $('#comparisonLineChart').hide();
+                const formData = $('#phoneForm').serializeArray();
+                const formObj = {};
+                formData.forEach(item => formObj[item.name] = item.value);
+
+                $.ajax({
+                    url: '/predict',
+                    type: 'POST',
+                    data: $('#phoneForm').serialize(),
+                    success: function(response) {
+                        $('#loading').hide();
+                        $('#result').html('<h3>Recommended Phone: ' + response.prediction + '</h3>').fadeIn();
+                        
+                        // Display phone details
+                        const details = response.phone_details;
+                        let detailsHtml = '<h4>Phone Details:</h4><table>';
+                        for (const key in details) {
+                            detailsHtml += '<tr><td>' + key + '</td><td>' + details[key] + '</td></tr>';
+                        }
+                        detailsHtml += '</table>';
+                        $('#phoneDetails').html(detailsHtml).fadeIn();
+                        
+                        // Fetch and display the comparison chart
+                        fetch('/stats', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(formObj)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            const userValues = [
+                                data.user_input.Price,
+                                data.user_input['Internal storage (GB)'],
+                                data.user_input['RAM (GB)'],
+                                data.user_input['Rear camera'],
+                                data.user_input['Front camera'],
+                                data.user_input['Battery capacity (mAh)']
+                            ];
+                            
+                            const modelValues = [
+                                data.model_output_stats.Price,
+                                data.model_output_stats['Internal storage (GB)'],
+                                data.model_output_stats['RAM (GB)'],
+                                data.model_output_stats['Rear camera'],
+                                data.model_output_stats['Front camera'],
+                                data.model_output_stats['Battery capacity (mAh)']
+                            ];
+                            
+                            // Convert to percentages for scaling
+                            const maxValues = [
+                                100000, // Example max value for Price
+                                512,    // Max Internal storage (GB)
+                                12,     // Max RAM (GB)
+                                102,    // Max Rear camera (MP)
+                                48,     // Max Front camera (MP)
+                                6000    // Max Battery capacity (mAh)
+                            ];
+                            
+                            const userPercentages = userValues.map((val, i) => (val / maxValues[i]) * 100);
+                            const modelPercentages = modelValues.map((val, i) => (val / maxValues[i]) * 100);
+                            
+                            // Destroy previous charts if they exist
+                            if (radarChart) {
+                                radarChart.destroy();
+                            }
+                            if (barChart) {
+                                barChart.destroy();
+                            }
+                            if (lineChart) {
+                                lineChart.destroy();
+                            }
+                            
+                            // Radar chart
+                            const radarCtx = document.getElementById('comparisonRadarChart').getContext('2d');
+                            $('#comparisonRadarChart').show();
+                            radarChart = new Chart(radarCtx, {
+                                type: 'radar',
+                                data: {
+                                    labels: ['Price', 'Internal storage (GB)', 'RAM (GB)', 'Rear camera', 'Front camera', 'Battery capacity (mAh)'],
+                                    datasets: [
+                                        {
+                                            label: 'User Input',
+                                            data: userPercentages,
+                                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                            borderColor: 'rgba(75, 192, 192, 1)',
+                                            borderWidth: 1
+                                        },
+                                        {
+                                            label: 'Recommended Phone',
+                                            data: modelPercentages,
+                                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                                            borderColor: 'rgba(153, 102, 255, 1)',
+                                            borderWidth: 1
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    scales: {
+                                        r: {
+                                            beginAtZero: true,
+                                            max: 100,
+                                            grid: {
+                                                color: 'rgba(0, 0, 0, 0.2)' // Darker grid lines for radar chart
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            // Bar chart
+                            const barCtx = document.getElementById('comparisonBarChart').getContext('2d');
+                            $('#comparisonBarChart').show();
+                            barChart = new Chart(barCtx, {
+                                type: 'bar',
+                                data: {
+                                    labels: ['Price', 'Internal storage (GB)', 'RAM (GB)', 'Rear camera', 'Front camera', 'Battery capacity (mAh)'],
+                                    datasets: [
+                                        {
+                                            label: 'User Input',
+                                            data: userPercentages,
+                                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                            borderColor: 'rgba(75, 192, 192, 1)',
+                                            borderWidth: 1
+                                        },
+                                        {
+                                            label: 'Recommended Phone',
+                                            data: modelPercentages,
+                                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                                            borderColor: 'rgba(153, 102, 255, 1)',
+                                            borderWidth: 1
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 100,
+                                            grid: {
+                                                color: 'rgba(0, 0, 0, 0.2)' // Darker grid lines for bar chart
+                                            },
+                                            ticks: {
+                                                callback: function(value) {
+                                                    return value + "%";
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                            // Line chart
+                            const lineCtx = document.getElementById('comparisonLineChart').getContext('2d');
+                            $('#comparisonLineChart').show();
+                            lineChart = new Chart(lineCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: ['Price', 'Internal storage (GB)', 'RAM (GB)', 'Rear camera', 'Front camera', 'Battery capacity (mAh)'],
+                                    datasets: [
+                                        {
+                                            label: 'User Input',
+                                            data: userPercentages,
+                                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                            borderColor: 'rgba(75, 192, 192, 1)',
+                                            borderWidth: 1,
+                                            fill: false,
+                                            tension: 0.1
+                                        },
+                                        {
+                                            label: 'Recommended Phone',
+                                            data: modelPercentages,
+                                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                                            borderColor: 'rgba(153, 102, 255, 1)',
+                                            borderWidth: 1,
+                                            fill: false,
+                                            tension: 0.1
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 100,
+                                            grid: {
+                                                color: 'rgba(0, 0, 0, 0.2)' // Darker grid lines for line chart
+                                            },
+                                            ticks: {
+                                                callback: function(value) {
+                                                    return value + "%";
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                    },
+                    error: function(error) {
+                        $('#loading').hide();
+                        $('#result').html('<h3>Error: ' + error.responseJSON.error + '</h3>').fadeIn();
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

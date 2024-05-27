@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KNN Prediction Form</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>KNN model</h1>
+        <a style="text-decoration: none; color: #000000; font-size: 20px; display: block; margin-left: 80%;" href="/">Back</a>
+        <form id="phoneForm">
+            <label for="Brand">Brand: (Type none if no preference)</label>
+            <input type="text" id="Brand" name="Brand" list="brands" required>
+            <datalist id="brands">
+                {% for brand in brands %}
+                    <option value="{{ brand }}">{{ brand }}</option>
+                {% endfor %}
+            </datalist>
+            <label for="Price">Price:</label>
+            <input type="number" id="Price" name="Price" required>
+            <label for="Internal storage (GB)">Internal Storage (GB):</label>
+            <input type="number" id="Internal storage (GB)" name="Internal storage (GB)" required max="512">
+            <label for="RAM (GB)">RAM (GB):</label>
+            <input type="number" id="RAM (GB)" name="RAM (GB)" required max="12">
+            <label for="Rear camera">Rear Camera (MP):</label>
+            <input type="number" id="Rear camera" name="Rear camera" required max="102">
+            <label for="Front camera">Front Camera (MP):</label>
+            <input type="number" id="Front camera" name="Front camera" required max="48">
+            <label for="Battery capacity (mAh)">Battery Capacity (mAh):</label>
+            <input type="number" id="Battery capacity (mAh)" name="Battery capacity (mAh)" required max="6000">
+            <button type="submit">Recommend</button>
+        </form>
+        <div id="loading" class="loading-spinner" style="display: none;"></div>
+        <div id="result"></div>
+        <div id="phoneDetails"></div>
+        <canvas id="comparisonRadarChart" style="display: none;"></canvas>
+        <canvas id="comparisonBarChart" style="display: none;"></canvas>
+        <canvas id="comparisonLineChart" style="display: none;"></canvas>
+    </div>
+
+    <script>
+        document.getElementById('phoneForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            var form = document.getElementById('phoneForm');
+            var formData = new FormData(form);
+
+            // Show loading spinner
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/knn_predict', true);
+            xhr.onload = function () {
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    var resultDiv = document.getElementById('result');
+                    resultDiv.innerHTML = 'Recommended Phones:<br>';
+                    response.predictions.forEach(function(phone) {
+                        resultDiv.innerHTML += phone + '<br>';
+                    });
+                    resultDiv.style.display = 'block';
+                } else {
+                    document.getElementById('result').innerHTML = 'Error: ' + xhr.responseText;
+                    document.getElementById('result').style.display = 'block';
+                }
+            };
+            xhr.onerror = function () {
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('result').innerHTML = 'Request failed. Please try again.';
+                document.getElementById('result').style.display = 'block';
+            };
+            xhr.send(formData);
+        });
+    </script>
+</body>
+</html>
